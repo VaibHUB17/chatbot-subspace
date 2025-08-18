@@ -11,12 +11,11 @@ export const CREATE_CHAT = gql`
 `;
 
 export const INSERT_MESSAGE = gql`
-  mutation InsertUserMessage($chatId: uuid!, $content: String!, $isBot: Boolean = false, $createdAt: timestamptz) {
+  mutation InsertUserMessage($chatId: uuid!, $content: String!, $isBot: Boolean = false) {
     insert_messages_one(object: { 
       chat_id: $chatId, 
       content: $content, 
-      is_bot: $isBot,
-      created_at: $createdAt
+      is_bot: $isBot
     }) {
       id
       chat_id

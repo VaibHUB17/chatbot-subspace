@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useMutation } from '@apollo/client';
 import { Send, Loader2, Paperclip, Smile, Mic } from 'lucide-react';
-import { INSERT_MESSAGE, SEND_MESSAGE } from '../../graphql/mutations';
+import {SEND_MESSAGE } from '../../graphql/mutations';
 
 interface MessageInputProps {
   chatId: string;
@@ -9,7 +9,6 @@ interface MessageInputProps {
 
 export const MessageInput: React.FC<MessageInputProps> = ({ chatId }) => {
   const [message, setMessage] = useState('');
-  const [insertUserMessage] = useMutation(INSERT_MESSAGE);
   const [sendMessage, { loading: sending }] = useMutation(SEND_MESSAGE);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -18,6 +17,8 @@ export const MessageInput: React.FC<MessageInputProps> = ({ chatId }) => {
     if (!message.trim() || sending) return;
 
     const messageContent = message.trim();
+    
+    // Clear message immediately for better UX
     setMessage('');
 
     // Reset textarea height
@@ -26,23 +27,13 @@ export const MessageInput: React.FC<MessageInputProps> = ({ chatId }) => {
     }
 
     try {
-      // First, insert the user message
-      await insertUserMessage({
-        variables: {
-          chatId,
-          content: messageContent,
-          isBot: false,
-          createdAt: new Date().toISOString(),
-        },
-      });
-
-      // Then trigger the bot response
       await sendMessage({
         variables: {
           chatId,
           content: messageContent,
         },
       });
+      // Message already cleared above
     } catch (error) {
       console.error('Failed to send message:', error);
       // Restore message on error

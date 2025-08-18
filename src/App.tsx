@@ -1,4 +1,3 @@
-import React from 'react';
 import { NhostProvider } from '@nhost/react';
 import { ApolloProvider } from '@apollo/client';
 import { nhost } from './lib/nhost';
