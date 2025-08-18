@@ -1,15 +1,25 @@
 import React, { useState } from 'react';
 import { useSignOut, useUserData } from '@nhost/react';
 import { LogOut, Menu, X, Settings, Plus, Search } from 'lucide-react';
+import { useMutation } from '@apollo/client';
 import { ChatList } from './ChatList';
 import { MessageList } from './MessageList';
 import { MessageInput } from './MessageInput';
+import { CREATE_CHAT } from '../../graphql/mutations';
+import { GET_CHATS } from '../../graphql/queries';
+import { nhost } from '../../lib/nhost';
 
 export const ChatInterface: React.FC = () => {
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showNewChatForm, setShowNewChatForm] = useState(false);
+  const [newChatTitle, setNewChatTitle] = useState('');
   const { signOut } = useSignOut();
   const user = useUserData();
+  
+  const [createChat] = useMutation(CREATE_CHAT, {
+    refetchQueries: [{ query: GET_CHATS }],
+  });
   
   // Set vh custom property for mobile browsers
   React.useEffect(() => {
@@ -27,6 +37,37 @@ export const ChatInterface: React.FC = () => {
   const handleChatSelect = (chatId: string) => {
     setSelectedChatId(chatId);
     setSidebarOpen(false);
+  };
+
+  const handleCreateChat = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    
+    try {
+      const userId = nhost.auth.getUser()?.id;
+      
+      if (!userId) {
+        console.error('No user ID found. User might not be authenticated.');
+        return;
+      }
+
+      // Set a default title if none is provided
+      const chatTitle = newChatTitle.trim() || `New Chat ${new Date().toLocaleString()}`;
+
+      const result = await createChat({
+        variables: { 
+          title: chatTitle,
+          userId: userId
+        }
+      });
+      
+      if (result.data?.insert_chats_one) {
+        setSelectedChatId(result.data.insert_chats_one.id);
+        setNewChatTitle('');
+        setShowNewChatForm(false);
+      }
+    } catch (error) {
+      console.error('Failed to create chat:', error);
+    }
   };
 
   return (
@@ -115,7 +156,7 @@ export const ChatInterface: React.FC = () => {
         {/* Chat area */}
         {selectedChatId ? (
           <div className="flex-1 flex flex-col bg-slate-50 overflow-hidden">
-            <div className="flex-1 overflow-hidden">
+            <div className="flex-1 overflow-y-auto">
               <MessageList chatId={selectedChatId} />
             </div>
             <MessageInput chatId={selectedChatId} />
@@ -132,13 +173,44 @@ export const ChatInterface: React.FC = () => {
                 Select an existing conversation from the sidebar or create a new chat to start talking with our AI assistant.
               </p>
               <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                <button className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-3 rounded-xl font-medium hover:from-blue-600 hover:to-purple-700 transition-all duration-200 transform hover:scale-105 shadow-lg">
-                  <Plus className="h-4 w-4 inline mr-2" />
-                  New Chat
-                </button>
-                <button className="bg-white text-slate-700 px-6 py-3 rounded-xl font-medium hover:bg-slate-50 transition-all duration-200 border border-slate-200 shadow-sm">
-                  Browse Chats
-                </button>
+                {!showNewChatForm ? (
+                  <button 
+                    onClick={() => setShowNewChatForm(true)}
+                    className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-3 rounded-xl font-medium hover:from-blue-600 hover:to-purple-700 transition-all duration-200 transform hover:scale-105 shadow-lg"
+                  >
+                    <Plus className="h-4 w-4 inline mr-2" />
+                    New Chat
+                  </button>
+                ) : (
+                  <form onSubmit={handleCreateChat} className="w-full max-w-md space-y-3">
+                    <input
+                      type="text"
+                      value={newChatTitle}
+                      onChange={(e) => setNewChatTitle(e.target.value)}
+                      placeholder="Enter chat title..."
+                      className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm transition-all duration-200"
+                      autoFocus
+                    />
+                    <div className="flex space-x-2">
+                      <button
+                        type="submit"
+                        className="flex-1 bg-blue-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-all duration-200"
+                      >
+                        Create
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowNewChatForm(false);
+                          setNewChatTitle('');
+                        }}
+                        className="flex-1 bg-slate-200 text-slate-700 px-3 py-2 rounded-lg text-sm font-medium hover:bg-slate-300 transition-all duration-200"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                )}
               </div>
             </div>
           </div>

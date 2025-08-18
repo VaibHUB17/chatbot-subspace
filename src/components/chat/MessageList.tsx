@@ -27,6 +27,7 @@ export const MessageList: React.FC<MessageListProps> = ({ chatId }) => {
       if (!container) return;
       
       const { scrollTop, scrollHeight, clientHeight } = container;
+      // If we're more than 100px away from the bottom, show the scroll button
       const isNotAtBottom = scrollHeight - scrollTop - clientHeight > 100;
       setShowScrollButton(isNotAtBottom);
     };
@@ -41,16 +42,36 @@ export const MessageList: React.FC<MessageListProps> = ({ chatId }) => {
     }
   }, []);
 
+  // Scroll to bottom on initial load
+  useEffect(() => {
+    if (messagesEndRef.current && messages.length > 0) {
+      // Force immediate scroll on first load
+      messagesEndRef.current.scrollIntoView();
+    }
+  }, [messages.length]);
+
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
-    if (messagesEndRef.current) {
-      // Use a small timeout to ensure DOM has updated before scrolling
-      const timeoutId = setTimeout(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-        setShowScrollButton(false);
-      }, 100);
+    if (messagesEndRef.current && messages.length > 0) {
+      const container = scrollContainerRef.current;
+      if (!container) return;
       
-      return () => clearTimeout(timeoutId);
+      // Check if we're already at the bottom before the new message
+      const { scrollTop, scrollHeight, clientHeight } = container;
+      const isAtBottom = scrollHeight - scrollTop - clientHeight < 100;
+      
+      // If we're at the bottom or it's the bot's message, auto-scroll
+      const isLastMessageFromBot = messages.length > 0 && messages[messages.length - 1].is_bot;
+      
+      if (isAtBottom || isLastMessageFromBot) {
+        // Use a small timeout to ensure DOM has updated before scrolling
+        const timeoutId = setTimeout(() => {
+          messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+          setShowScrollButton(false);
+        }, 100);
+        
+        return () => clearTimeout(timeoutId);
+      }
     }
   }, [messages]);
 
@@ -66,8 +87,15 @@ export const MessageList: React.FC<MessageListProps> = ({ chatId }) => {
   };
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    setShowScrollButton(false);
+    const container = scrollContainerRef.current;
+    if (container) {
+      // Smooth scroll to the bottom
+      container.scrollTo({
+        top: container.scrollHeight,
+        behavior: 'smooth'
+      });
+      setShowScrollButton(false);
+    }
   };
 
   if (loading) {
@@ -82,7 +110,7 @@ export const MessageList: React.FC<MessageListProps> = ({ chatId }) => {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto bg-white scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent relative" ref={scrollContainerRef}>
+    <div className="flex-1 overflow-y-auto bg-white scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent relative pb-12" ref={scrollContainerRef}>
       {messages.length === 0 ? (
         <div className="flex items-center justify-center h-full">
           <div className="text-center max-w-sm mx-auto p-8">
@@ -176,7 +204,7 @@ export const MessageList: React.FC<MessageListProps> = ({ chatId }) => {
       {showScrollButton && (
         <button
           onClick={scrollToBottom}
-          className="absolute bottom-8 right-8 p-3 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+          className="absolute bottom-8 right-8 p-3 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 animate-bounce-soft"
           aria-label="Scroll to bottom"
         >
           <ArrowDown className="h-5 w-5" />
