@@ -1,0 +1,141 @@
+import React, { useState, useRef } from 'react';
+import { useMutation } from '@apollo/client';
+import { Send, Loader2, Paperclip, Smile, Mic } from 'lucide-react';
+import { INSERT_MESSAGE, SEND_MESSAGE } from '../../graphql/mutations';
+
+interface MessageInputProps {
+  chatId: string;
+}
+
+export const MessageInput: React.FC<MessageInputProps> = ({ chatId }) => {
+  const [message, setMessage] = useState('');
+  const [insertMessage] = useMutation(INSERT_MESSAGE);
+  const [sendMessage, { loading: sending }] = useMutation(SEND_MESSAGE);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!message.trim() || sending) return;
+
+    const messageContent = message.trim();
+    setMessage('');
+
+    // Reset textarea height
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
+
+    try {
+      // First, insert the user message
+      await insertMessage({
+        variables: {
+          chatId,
+          content: messageContent,
+        },
+      });
+
+      // Then trigger the bot response
+      await sendMessage({
+        variables: {
+          chatId,
+          content: messageContent,
+        },
+      });
+    } catch (error) {
+      console.error('Failed to send message:', error);
+      // Restore message on error
+      setMessage(messageContent);
+    }
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit(e);
+    }
+  };
+
+  const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setMessage(e.target.value);
+    
+    // Auto-resize textarea
+    const textarea = e.target;
+    textarea.style.height = 'auto';
+    textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
+  };
+
+  return (
+    <div className="border-t border-slate-200 bg-white p-4">
+      <form onSubmit={handleSubmit} className="flex items-end space-x-3">
+        {/* Additional Actions */}
+        <div className="flex space-x-1">
+          <button
+            type="button"
+            className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-all duration-200"
+            title="Attach file"
+          >
+            <Paperclip className="h-5 w-5" />
+          </button>
+          <button
+            type="button"
+            className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-all duration-200"
+            title="Add emoji"
+          >
+            <Smile className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* Message Input */}
+        <div className="flex-1 relative">
+          <textarea
+            ref={textareaRef}
+            value={message}
+            onChange={handleTextareaChange}
+            onKeyPress={handleKeyPress}
+            placeholder="Type your message..."
+            disabled={sending}
+            rows={1}
+            className="w-full px-4 py-3 pr-12 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed resize-none transition-all duration-200 text-sm"
+            style={{ minHeight: '48px', maxHeight: '120px' }}
+          />
+          
+          {/* Voice Input Button */}
+          <button
+            type="button"
+            className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1 text-slate-400 hover:text-blue-600 transition-colors"
+            title="Voice input"
+          >
+            <Mic className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Send Button */}
+        <button
+          type="submit"
+          disabled={!message.trim() || sending}
+          className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white p-3 rounded-xl transition-all duration-200 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none shadow-lg hover:shadow-xl flex items-center justify-center min-w-[48px]"
+        >
+          {sending ? (
+            <Loader2 className="h-5 w-5 animate-spin" />
+          ) : (
+            <Send className="h-5 w-5" />
+          )}
+        </button>
+      </form>
+
+      {/* Quick Actions */}
+      <div className="flex items-center justify-between mt-3 text-xs text-slate-500">
+        <div className="flex space-x-4">
+          <button className="hover:text-blue-600 transition-colors">Ask about...</button>
+          <button className="hover:text-blue-600 transition-colors">Summarize</button>
+          <button className="hover:text-blue-600 transition-colors">Explain</button>
+        </div>
+        <div className="flex items-center space-x-2">
+          <span>Press Enter to send</span>
+          <div className="w-1 h-1 bg-slate-300 rounded-full"></div>
+          <span>Shift + Enter for new line</span>
+        </div>
+      </div>
+    </div>
+  );
+};
