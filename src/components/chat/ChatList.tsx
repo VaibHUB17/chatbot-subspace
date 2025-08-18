@@ -4,6 +4,7 @@ import { Plus, MessageCircle, Calendar, Sparkles, Trash2, Edit3 } from 'lucide-r
 import { GET_CHATS } from '../../graphql/queries';
 import { CREATE_CHAT } from '../../graphql/mutations';
 import { Chat } from '../../types';
+import { nhost } from '../../lib/nhost';
 
 interface ChatListProps {
   selectedChatId?: string;
@@ -24,8 +25,18 @@ export const ChatList: React.FC<ChatListProps> = ({ selectedChatId, onChatSelect
     if (!newChatTitle.trim()) return;
 
     try {
+      const userId = nhost.auth.getUser()?.id;
+      
+      if (!userId) {
+        console.error('No user ID found. User might not be authenticated.');
+        return;
+      }
+
       const result = await createChat({
-        variables: { title: newChatTitle.trim() }
+        variables: { 
+          title: newChatTitle.trim(),
+          userId: userId
+        }
       });
       
       if (result.data?.insert_chats_one) {
@@ -68,9 +79,9 @@ export const ChatList: React.FC<ChatListProps> = ({ selectedChatId, onChatSelect
   const chats: Chat[] = data?.chats || [];
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col overflow-hidden">
       {/* New Chat Section */}
-      <div className="p-4 border-b border-slate-200">
+      <div className="p-4 border-b border-slate-200 flex-shrink-0">
         {!showNewChatForm ? (
           <button
             onClick={() => setShowNewChatForm(true)}
@@ -114,7 +125,7 @@ export const ChatList: React.FC<ChatListProps> = ({ selectedChatId, onChatSelect
       </div>
 
       {/* Chat List */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent">
         {chats.length === 0 ? (
           <div className="p-6 text-center">
             <div className="bg-slate-100 rounded-full p-4 w-16 h-16 mx-auto mb-4 flex items-center justify-center">

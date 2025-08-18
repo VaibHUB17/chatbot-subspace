@@ -1,27 +1,106 @@
 import React, { useState } from 'react';
-import { useSignInEmailPassword, useSignUpEmailPassword } from '@nhost/react';
-import { Mail, Lock, User, Loader2, MessageSquare, Sparkles } from 'lucide-react';
+import { Mail, Lock, Loader2, MessageSquare, Sparkles } from 'lucide-react';
+import { nhost } from '../../lib/nhost';
 
 export const AuthForm: React.FC = () => {
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isResendingVerification, setIsResendingVerification] = useState(false);
+  const [verificationMessage, setVerificationMessage] = useState('');
+  const [verificationStatus, setVerificationStatus] = useState<'success' | 'error' | null>(null);
+  const [isSigningIn, setIsSigningIn] = useState(false);
+  const [isSigningUp, setIsSigningUp] = useState(false);
+  const [authError, setAuthError] = useState<{ message: string; error?: string } | null>(null);
   
-  const { signInEmailPassword, isLoading: signInLoading, error: signInError } = useSignInEmailPassword();
-  const { signUpEmailPassword, isLoading: signUpLoading, error: signUpError } = useSignUpEmailPassword();
-
-  const isLoading = signInLoading || signUpLoading;
-  const error = signInError || signUpError;
+  const isLoading = isSigningIn || isSigningUp || isResendingVerification;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setVerificationMessage('');
+    setVerificationStatus(null);
+    setAuthError(null);
     
     if (isSignUp) {
-      await signUpEmailPassword(email, password);
+      setIsSigningUp(true);
+      try {
+        // Sign up the user with Nhost auth API
+        const { error } = await nhost.auth.signUp({
+          email,
+          password,
+        });
+        
+        if (error) {
+          setAuthError({ message: error.message, error: String(error.status) });
+          setVerificationMessage(`Error: ${error.message}`);
+          setVerificationStatus('error');
+        } else {
+          // On successful signup, show verification message
+          setVerificationMessage('Account created! A verification email has been sent to your email address. Please check your inbox and verify your account before signing in.');
+          setVerificationStatus('success');
+          // Switch to sign-in mode after successful registration
+          setIsSignUp(false);
+        }
+      } catch (err) {
+        console.error('Signup error:', err);
+        setAuthError({ message: err instanceof Error ? err.message : 'An unexpected error occurred' });
+        setVerificationMessage('An unexpected error occurred during sign up. Please try again.');
+        setVerificationStatus('error');
+      } finally {
+        setIsSigningUp(false);
+      }
     } else {
-      await signInEmailPassword(email, password);
+      // Handle sign in
+      setIsSigningIn(true);
+      try {
+        const { error } = await nhost.auth.signIn({
+          email,
+          password,
+        });
+        
+        if (error) {
+          console.error('Sign in error:', error);
+          setAuthError({ message: error.message, error: String(error.status) });
+          if (error.status === 401) {
+            setVerificationMessage('Please verify your email before signing in.');
+            setVerificationStatus('error');
+          }
+        }
+      } catch (err) {
+        console.error('Sign in error:', err);
+        setAuthError({ message: err instanceof Error ? err.message : 'An unexpected error occurred' });
+      } finally {
+        setIsSigningIn(false);
+      }
     }
   };
+
+  const handleResendVerification = async () => {
+    if (email) {
+      setIsResendingVerification(true);
+      setVerificationMessage('');
+      try {
+        const { error } = await nhost.auth.sendVerificationEmail({
+          email
+        });
+        
+        if (error) {
+          setVerificationMessage(`Error: ${error.message}`);
+          setVerificationStatus('error');
+        } else {
+          setVerificationMessage('Verification email has been sent. Please check your inbox.');
+          setVerificationStatus('success');
+        }
+      } catch (err) {
+        console.error('Error resending verification:', err);
+        setVerificationMessage('An unexpected error occurred. Please try again.');
+        setVerificationStatus('error');
+      } finally {
+        setIsResendingVerification(false);
+      }
+    }
+  };
+  
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center p-4 relative overflow-hidden">
@@ -89,9 +168,55 @@ export const AuthForm: React.FC = () => {
               </div>
             </div>
 
-            {error && (
+            {authError && (
               <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 backdrop-blur-sm">
-                <p className="text-red-300 text-sm">{error.message}</p>
+                <p className="text-red-300 text-sm">{authError.message}</p>
+                {authError.error === 'unverified-user' && (
+                  <div className="mt-2">
+                    <p className="text-red-300 text-sm mb-2">Please verify your email before signing in.</p>
+                    <button
+                      type="button"
+                      onClick={handleResendVerification}
+                      disabled={isResendingVerification}
+                      className="text-blue-400 hover:text-blue-300 text-sm flex items-center"
+                    >
+                      {isResendingVerification ? (
+                        <>
+                          <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                          Sending...
+                        </>
+                      ) : (
+                        'Resend verification email'
+                      )}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {verificationMessage && !authError && (
+              <div className={`${verificationStatus === 'error' ? 'bg-red-500/10 border-red-500/20 text-red-300' : 'bg-green-500/10 border-green-500/20 text-green-300'} border rounded-xl p-4 backdrop-blur-sm`}>
+                <p className="text-sm">{verificationMessage}</p>
+                {verificationStatus === 'success' && !isSignUp && (
+                  <p className="text-sm mt-2">Once verified, you can sign in with your credentials.</p>
+                )}
+                {verificationStatus === 'error' && (
+                  <button
+                    type="button"
+                    onClick={handleResendVerification}
+                    disabled={isResendingVerification}
+                    className="text-blue-400 hover:text-blue-300 text-sm flex items-center mt-2"
+                  >
+                    {isResendingVerification ? (
+                      <>
+                        <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                        Sending...
+                      </>
+                    ) : (
+                      'Try resending verification email'
+                    )}
+                  </button>
+                )}
               </div>
             )}
 

@@ -9,7 +9,7 @@ interface MessageInputProps {
 
 export const MessageInput: React.FC<MessageInputProps> = ({ chatId }) => {
   const [message, setMessage] = useState('');
-  const [insertMessage] = useMutation(INSERT_MESSAGE);
+  const [insertUserMessage] = useMutation(INSERT_MESSAGE);
   const [sendMessage, { loading: sending }] = useMutation(SEND_MESSAGE);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -27,10 +27,12 @@ export const MessageInput: React.FC<MessageInputProps> = ({ chatId }) => {
 
     try {
       // First, insert the user message
-      await insertMessage({
+      await insertUserMessage({
         variables: {
           chatId,
           content: messageContent,
+          isBot: false,
+          createdAt: new Date().toISOString(),
         },
       });
 
@@ -65,7 +67,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({ chatId }) => {
   };
 
   return (
-    <div className="border-t border-slate-200 bg-white p-4">
+    <div className="border-t border-slate-200 bg-white p-4 flex-shrink-0">
       <form onSubmit={handleSubmit} className="flex items-end space-x-3">
         {/* Additional Actions */}
         <div className="flex space-x-1">

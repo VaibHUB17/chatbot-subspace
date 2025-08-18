@@ -14,14 +14,14 @@ const wsLink = new GraphQLWsLink(
     url: nhost.graphql.getUrl().replace('http', 'ws'),
     connectionParams: () => ({
       headers: {
-        Authorization: `Bearer ${nhost.auth.getJWTToken()}`,
+        Authorization: `Bearer ${nhost.auth.getAccessToken()}`,
       },
     }),
   })
 );
 
 const authLink = setContext((_, { headers }) => {
-  const token = nhost.auth.getJWTToken();
+  const token = nhost.auth.getAccessToken();
   
   return {
     headers: {

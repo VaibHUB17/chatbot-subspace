@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useMemo } from 'react';
 import { useSubscription } from '@apollo/client';
 import { Bot, User, Copy, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { MESSAGES_SUBSCRIPTION } from '../../graphql/subscriptions';
@@ -14,10 +14,19 @@ export const MessageList: React.FC<MessageListProps> = ({ chatId }) => {
     variables: { chatId },
   });
 
-  const messages: Message[] = data?.messages || [];
+  const messages: Message[] = useMemo(() => {
+    return data?.messages || [];
+  }, [data?.messages]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (messagesEndRef.current) {
+      // Use a small timeout to ensure DOM has updated before scrolling
+      const timeoutId = setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
+      
+      return () => clearTimeout(timeoutId);
+    }
   }, [messages]);
 
   const formatTime = (dateString: string) => {
@@ -43,7 +52,7 @@ export const MessageList: React.FC<MessageListProps> = ({ chatId }) => {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto bg-white">
+    <div className="flex-1 overflow-y-auto bg-white scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent">
       {messages.length === 0 ? (
         <div className="flex items-center justify-center h-full">
           <div className="text-center max-w-sm mx-auto p-8">
@@ -55,7 +64,7 @@ export const MessageList: React.FC<MessageListProps> = ({ chatId }) => {
           </div>
         </div>
       ) : (
-        <div className="p-6 space-y-6">
+        <div className="p-6 space-y-6 min-h-full">
           {messages.map((message, index) => (
             <div
               key={message.id}

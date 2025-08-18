@@ -10,6 +10,19 @@ export const ChatInterface: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { signOut } = useSignOut();
   const user = useUserData();
+  
+  // Set vh custom property for mobile browsers
+  React.useEffect(() => {
+    const setVh = () => {
+      const vh = window.innerHeight * 0.01;
+      document.documentElement.style.setProperty('--vh', `${vh}px`);
+    };
+    
+    setVh();
+    window.addEventListener('resize', setVh);
+    
+    return () => window.removeEventListener('resize', setVh);
+  }, []);
 
   const handleChatSelect = (chatId: string) => {
     setSelectedChatId(chatId);
@@ -17,7 +30,7 @@ export const ChatInterface: React.FC = () => {
   };
 
   return (
-    <div className="h-screen bg-slate-50 flex overflow-hidden">
+    <div className="h-screen bg-slate-50 flex overflow-hidden" style={{ height: 'calc(var(--vh, 1vh) * 100)' }}>
       {/* Mobile sidebar backdrop */}
       {sidebarOpen && (
         <div
@@ -29,11 +42,11 @@ export const ChatInterface: React.FC = () => {
       {/* Sidebar */}
       <div className={`
         fixed inset-y-0 left-0 z-50 w-80 bg-white shadow-2xl transform transition-all duration-300 ease-out
-        md:relative md:translate-x-0 border-r border-slate-200
+        md:relative md:translate-x-0 border-r border-slate-200 flex flex-col
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
         {/* Sidebar Header */}
-        <div className="flex items-center justify-between p-6 border-b border-slate-200 bg-gradient-to-r from-blue-50 to-purple-50">
+        <div className="flex items-center justify-between p-6 border-b border-slate-200 bg-gradient-to-r from-blue-50 to-purple-50 flex-shrink-0">
           <div className="flex items-center space-x-3">
             <div className="h-10 w-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
               <span className="text-white font-bold text-lg">AI</span>
@@ -60,14 +73,16 @@ export const ChatInterface: React.FC = () => {
           </div>
         </div>
         
-        <ChatList
-          selectedChatId={selectedChatId || undefined}
-          onChatSelect={handleChatSelect}
-        />
+        <div className="flex-1 overflow-hidden">
+          <ChatList
+            selectedChatId={selectedChatId || undefined}
+            onChatSelect={handleChatSelect}
+          />
+        </div>
       </div>
 
       {/* Main content */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
         <div className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between shadow-sm">
           <div className="flex items-center space-x-4">
@@ -99,8 +114,10 @@ export const ChatInterface: React.FC = () => {
 
         {/* Chat area */}
         {selectedChatId ? (
-          <div className="flex-1 flex flex-col bg-slate-50">
-            <MessageList chatId={selectedChatId} />
+          <div className="flex-1 flex flex-col bg-slate-50 overflow-hidden">
+            <div className="flex-1 overflow-hidden">
+              <MessageList chatId={selectedChatId} />
+            </div>
             <MessageInput chatId={selectedChatId} />
           </div>
         ) : (
