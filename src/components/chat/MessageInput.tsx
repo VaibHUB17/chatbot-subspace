@@ -1,7 +1,8 @@
-import React, { useState, useRef } from 'react';
-import { useMutation } from '@apollo/client';
-import { Send, Loader2, Paperclip, Smile, Mic } from 'lucide-react';
-import {SEND_MESSAGE } from '../../graphql/mutations';
+import React, { useState, useRef, useEffect } from 'react';
+import { useMutation, useSubscription } from '@apollo/client';
+import { Send, Loader2, Paperclip, Smile, Mic, AlertCircle } from 'lucide-react';
+import { SEND_MESSAGE } from '../../graphql/mutations';
+import { MESSAGES_SUBSCRIPTION } from '../../graphql/subscriptions';
 
 interface MessageInputProps {
   chatId: string;
@@ -10,7 +11,53 @@ interface MessageInputProps {
 export const MessageInput: React.FC<MessageInputProps> = ({ chatId }) => {
   const [message, setMessage] = useState('');
   const [sendMessage, { loading: sending }] = useMutation(SEND_MESSAGE);
+  const [botIsReplying, setBotIsReplying] = useState(false);
+  const [showRateLimit, setShowRateLimit] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  
+  // Listen to new messages via subscription
+  const { data: messagesData } = useSubscription(MESSAGES_SUBSCRIPTION, {
+    variables: { chatId },
+  });
+  
+  // Track when bot has replied to the message
+  useEffect(() => {
+    if (messagesData?.messages) {
+      const messages = messagesData.messages;
+      if (messages.length > 0) {
+        const lastMessage = messages[messages.length - 1];
+        if (lastMessage.is_bot) {
+          // Bot has replied, immediately hide rate limit message
+          setShowRateLimit(false);
+          
+          // Clear any pending rate limit timeouts to prevent flickering
+          if (timeoutRef.current) {
+            clearTimeout(timeoutRef.current);
+            timeoutRef.current = null;
+          }
+          
+          // Keep the "Bot is replying" indicator visible for a short time
+          // then fade it out gracefully
+          const replyDelay = setTimeout(() => {
+            setBotIsReplying(false);
+          }, 2000);
+          
+          return () => clearTimeout(replyDelay);
+        }
+      }
+    }
+  }, [messagesData]);
+  
+  // Clean up all timeouts on component unmount
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+    };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -20,10 +67,22 @@ export const MessageInput: React.FC<MessageInputProps> = ({ chatId }) => {
     
     // Clear message immediately for better UX
     setMessage('');
+    
+    // Reset any previous rate limit state
+    setShowRateLimit(false);
+    
+    // Start showing "Bot is replying" immediately
+    setBotIsReplying(true);
 
     // Reset textarea height
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
+    }
+
+    // Clear any existing timeout to prevent unexpected behavior
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
     }
 
     try {
@@ -33,11 +92,23 @@ export const MessageInput: React.FC<MessageInputProps> = ({ chatId }) => {
           content: messageContent,
         },
       });
-      // Message already cleared above
+      
+      // Set up a timeout to check if bot replied
+      // If not replied within 10 seconds, show rate limit message
+      timeoutRef.current = setTimeout(() => {
+        // Only show rate limit if bot is still replying after the timeout
+        if (botIsReplying) {
+          setBotIsReplying(false);
+          setShowRateLimit(true);
+        }
+      }, 10000);
+      
     } catch (error) {
       console.error('Failed to send message:', error);
       // Restore message on error
       setMessage(messageContent);
+      setBotIsReplying(false);
+      setShowRateLimit(true);
     }
   };
 
@@ -59,6 +130,26 @@ export const MessageInput: React.FC<MessageInputProps> = ({ chatId }) => {
 
   return (
     <div className="border-t border-slate-200 bg-white p-4 flex-shrink-0">
+      {/* Bot status messages */}
+      {botIsReplying && (
+        <div className="mb-2 text-center">
+          <div className="inline-flex items-center px-3 py-1 rounded-full bg-blue-50 text-blue-600 text-xs">
+            <Loader2 className="h-3 w-3 mr-2 animate-spin" />
+            Bot is replying...
+          </div>
+        </div>
+      )}
+      
+      {/* Only show rate limit if bot is not replying to prevent flickering */}
+      {showRateLimit && !botIsReplying && (
+        <div className="mb-2 text-center animate-fade-in">
+          <div className="inline-flex items-center px-3 py-1 rounded-full bg-amber-50 text-amber-600 text-xs">
+            <AlertCircle className="h-3 w-3 mr-2" />
+            Bot hit rate limit. Please try again later.
+          </div>
+        </div>
+      )}
+      
       <form onSubmit={handleSubmit} className="flex items-end space-x-3">
         {/* Additional Actions */}
         <div className="flex space-x-1">
