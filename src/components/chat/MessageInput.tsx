@@ -28,22 +28,15 @@ export const MessageInput: React.FC<MessageInputProps> = ({ chatId }) => {
       if (messages.length > 0) {
         const lastMessage = messages[messages.length - 1];
         if (lastMessage.is_bot) {
-          // Bot has replied, immediately hide rate limit message
+          // Bot has replied, hide rate limit message and set bot is not replying
           setShowRateLimit(false);
+          setBotIsReplying(false);
           
-          // Clear any pending rate limit timeouts to prevent flickering
+          // Clear any pending timeouts
           if (timeoutRef.current) {
             clearTimeout(timeoutRef.current);
             timeoutRef.current = null;
           }
-          
-          // Keep the "Bot is replying" indicator visible for a short time
-          // then fade it out gracefully
-          const replyDelay = setTimeout(() => {
-            setBotIsReplying(false);
-          }, 2000);
-          
-          return () => clearTimeout(replyDelay);
         }
       }
     }
@@ -68,10 +61,10 @@ export const MessageInput: React.FC<MessageInputProps> = ({ chatId }) => {
     // Clear message immediately for better UX
     setMessage('');
     
-    // Reset any previous rate limit state
+    // Reset rate limit message
     setShowRateLimit(false);
     
-    // Start showing "Bot is replying" immediately
+    // Set bot is replying
     setBotIsReplying(true);
 
     // Reset textarea height
@@ -79,7 +72,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({ chatId }) => {
       textareaRef.current.style.height = 'auto';
     }
 
-    // Clear any existing timeout to prevent unexpected behavior
+    // Clear any existing timeout
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
       timeoutRef.current = null;
@@ -94,9 +87,8 @@ export const MessageInput: React.FC<MessageInputProps> = ({ chatId }) => {
       });
       
       // Set up a timeout to check if bot replied
-      // If not replied within 10 seconds, show rate limit message
+      // If bot hasn't replied after 10 seconds, show the rate limit message
       timeoutRef.current = setTimeout(() => {
-        // Only show rate limit if bot is still replying after the timeout
         if (botIsReplying) {
           setBotIsReplying(false);
           setShowRateLimit(true);
@@ -108,7 +100,6 @@ export const MessageInput: React.FC<MessageInputProps> = ({ chatId }) => {
       // Restore message on error
       setMessage(messageContent);
       setBotIsReplying(false);
-      setShowRateLimit(true);
     }
   };
 
@@ -140,12 +131,12 @@ export const MessageInput: React.FC<MessageInputProps> = ({ chatId }) => {
         </div>
       )}
       
-      {/* Only show rate limit if bot is not replying to prevent flickering */}
-      {showRateLimit && !botIsReplying && (
+      {/* Show rate limit message only when the bot didn't reply after action is complete */}
+      {showRateLimit && (
         <div className="mb-2 text-center animate-fade-in">
           <div className="inline-flex items-center px-3 py-1 rounded-full bg-amber-50 text-amber-600 text-xs">
             <AlertCircle className="h-3 w-3 mr-2" />
-            Bot hit rate limit. Please try again later.
+            Chatbot hit rate limit. Please try again later.
           </div>
         </div>
       )}
