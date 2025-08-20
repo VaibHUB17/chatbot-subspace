@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState} from 'react';
 import { useSignOut, useUserData } from '@nhost/react';
-import { LogOut, Menu, X, Settings, Plus, Search } from 'lucide-react';
+import { LogOut, Menu, X, Plus } from 'lucide-react';
 import { useMutation } from '@apollo/client';
 import { ChatList } from './ChatList';
 import { MessageList } from './MessageList';
@@ -8,12 +8,15 @@ import { MessageInput } from './MessageInput';
 import { CREATE_CHAT } from '../../graphql/mutations';
 import { GET_CHATS } from '../../graphql/queries';
 import { nhost } from '../../lib/nhost';
+import { Message } from '../../types';
 
 export const ChatInterface: React.FC = () => {
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showNewChatForm, setShowNewChatForm] = useState(false);
   const [newChatTitle, setNewChatTitle] = useState('');
+  const [userMessages, setUserMessages] = useState<Message[]>([]);
+  const [botIsReplying, setBotIsReplying] = useState(false);
   const { signOut } = useSignOut();
   const user = useUserData();
   
@@ -37,6 +40,12 @@ export const ChatInterface: React.FC = () => {
   const handleChatSelect = (chatId: string) => {
     setSelectedChatId(chatId);
     setSidebarOpen(false);
+    // Clear user messages when changing chats
+    setUserMessages([]);
+  };
+  
+  const handleUserMessageSent = (message: Message) => {
+    setUserMessages(prevMessages => [...prevMessages, message]);
   };
 
   const handleCreateChat = async (e?: React.FormEvent) => {
@@ -142,24 +151,15 @@ export const ChatInterface: React.FC = () => {
               </p>
             </div>
           </div>
-          
           <div className="flex items-center space-x-2">
-            <button className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-all duration-200">
-              <Search className="h-5 w-5" />
-            </button>
-            <button className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-all duration-200">
-              <Settings className="h-5 w-5" />
-            </button>
           </div>
         </div>
 
         {/* Chat area */}
         {selectedChatId ? (
           <div className="flex-1 flex flex-col bg-slate-50 overflow-hidden">
-            <div className="flex-1 overflow-y-auto">
-              <MessageList chatId={selectedChatId} />
-            </div>
-            <MessageInput chatId={selectedChatId} />
+            <MessageList chatId={selectedChatId} userMessages={userMessages} botIsReplying={botIsReplying} />
+            <MessageInput chatId={selectedChatId} onUserMessageSent={handleUserMessageSent} onBotReplyingChange={setBotIsReplying} />
           </div>
         ) : (
           <div className="flex-1 flex items-center justify-center bg-gradient-to-br from-slate-50 to-blue-50">

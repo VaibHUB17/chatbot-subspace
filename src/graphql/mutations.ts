@@ -30,6 +30,7 @@ export const SEND_MESSAGE = gql`
   mutation SendMessage($chatId: uuid!, $content: String!) {
     sendMessage(chatId: $chatId, content: $content) {
       message
+      success
     }
   }
 `;

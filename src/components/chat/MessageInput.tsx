@@ -3,12 +3,15 @@ import { useMutation, useSubscription } from '@apollo/client';
 import { Send, Loader2, Paperclip, Smile, Mic, AlertCircle } from 'lucide-react';
 import { SEND_MESSAGE } from '../../graphql/mutations';
 import { MESSAGES_SUBSCRIPTION } from '../../graphql/subscriptions';
+import { Message } from '../../types';
 
 interface MessageInputProps {
   chatId: string;
+  onUserMessageSent: (message: Message) => void;
+  onBotReplyingChange?: (isReplying: boolean) => void;
 }
 
-export const MessageInput: React.FC<MessageInputProps> = ({ chatId }) => {
+export const MessageInput: React.FC<MessageInputProps> = ({ chatId, onUserMessageSent, onBotReplyingChange }) => {
   const [message, setMessage] = useState('');
   const [sendMessage, { loading: sending }] = useMutation(SEND_MESSAGE);
   const [botIsReplying, setBotIsReplying] = useState(false);
@@ -32,6 +35,11 @@ export const MessageInput: React.FC<MessageInputProps> = ({ chatId }) => {
           setShowRateLimit(false);
           setBotIsReplying(false);
           
+          // Notify parent component
+          if (onBotReplyingChange) {
+            onBotReplyingChange(false);
+          }
+          
           // Clear any pending timeouts
           if (timeoutRef.current) {
             clearTimeout(timeoutRef.current);
@@ -40,7 +48,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({ chatId }) => {
         }
       }
     }
-  }, [messagesData]);
+  }, [messagesData, onBotReplyingChange]);
   
   // Clean up all timeouts on component unmount
   useEffect(() => {
@@ -49,8 +57,13 @@ export const MessageInput: React.FC<MessageInputProps> = ({ chatId }) => {
         clearTimeout(timeoutRef.current);
         timeoutRef.current = null;
       }
+      
+      // Ensure we reset the bot replying state if component unmounts
+      if (botIsReplying && onBotReplyingChange) {
+        onBotReplyingChange(false);
+      }
     };
-  }, []);
+  }, [botIsReplying, onBotReplyingChange]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -66,6 +79,11 @@ export const MessageInput: React.FC<MessageInputProps> = ({ chatId }) => {
     
     // Set bot is replying
     setBotIsReplying(true);
+    
+    // Notify parent component
+    if (onBotReplyingChange) {
+      onBotReplyingChange(true);
+    }
 
     // Reset textarea height
     if (textareaRef.current) {
@@ -79,6 +97,18 @@ export const MessageInput: React.FC<MessageInputProps> = ({ chatId }) => {
     }
 
     try {
+      // Create a user message to display immediately in the UI
+      const userMessage: Message = {
+        id: `temp-${Date.now()}`, // Temporary ID until server responds
+        content: messageContent,
+        is_bot: false,
+        created_at: new Date().toISOString()
+      };
+      
+      // Add the user message to the UI immediately
+      onUserMessageSent(userMessage);
+      
+      // Send the message to the server
       await sendMessage({
         variables: {
           chatId,
@@ -87,19 +117,28 @@ export const MessageInput: React.FC<MessageInputProps> = ({ chatId }) => {
       });
       
       // Set up a timeout to check if bot replied
-      // If bot hasn't replied after 10 seconds, show the rate limit message
+      // If bot hasn't replied after 5 seconds, show the rate limit message
       timeoutRef.current = setTimeout(() => {
         if (botIsReplying) {
           setBotIsReplying(false);
+          // Notify parent component
+          if (onBotReplyingChange) {
+            onBotReplyingChange(false);
+          }
           setShowRateLimit(true);
         }
-      }, 10000);
+      }, 5000);
       
     } catch (error) {
       console.error('Failed to send message:', error);
       // Restore message on error
       setMessage(messageContent);
       setBotIsReplying(false);
+      
+      // Notify parent component
+      if (onBotReplyingChange) {
+        onBotReplyingChange(false);
+      }
     }
   };
 
@@ -120,7 +159,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({ chatId }) => {
   };
 
   return (
-    <div className="border-t border-slate-200 bg-white p-4 flex-shrink-0">
+    <div className="border-t border-slate-200 bg-white px-4 py-3 flex-shrink-0">
       {/* Bot status messages */}
       {botIsReplying && (
         <div className="mb-2 text-center">
@@ -200,11 +239,6 @@ export const MessageInput: React.FC<MessageInputProps> = ({ chatId }) => {
 
       {/* Quick Actions */}
       <div className="flex items-center justify-between mt-3 text-xs text-slate-500">
-        <div className="flex space-x-4">
-          <button className="hover:text-blue-600 transition-colors">Ask about...</button>
-          <button className="hover:text-blue-600 transition-colors">Summarize</button>
-          <button className="hover:text-blue-600 transition-colors">Explain</button>
-        </div>
         <div className="flex items-center space-x-2">
           <span>Press Enter to send</span>
           <div className="w-1 h-1 bg-slate-300 rounded-full"></div>
