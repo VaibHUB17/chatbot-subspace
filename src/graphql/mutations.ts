@@ -10,6 +10,27 @@ export const CREATE_CHAT = gql`
   }
 `;
 
+export const UPDATE_CHAT_TITLE = gql`
+  mutation UpdateChatTitle($id: uuid!, $title: String!) {
+    update_chats_by_pk(
+      pk_columns: { id: $id }, 
+      _set: { title: $title }
+    ) {
+      id
+      title
+      updated_at
+    }
+  }
+`;
+
+export const DELETE_CHAT = gql`
+  mutation DeleteChat($id: uuid!) {
+    delete_chats_by_pk(id: $id) {
+      id
+    }
+  }
+`;
+
 export const INSERT_MESSAGE = gql`
   mutation InsertUserMessage($chatId: uuid!, $content: String!, $isBot: Boolean = false) {
     insert_messages_one(object: { 

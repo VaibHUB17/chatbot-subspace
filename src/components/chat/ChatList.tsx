@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
-import { Plus, MessageCircle, Calendar, Sparkles, Trash2, Edit3 } from 'lucide-react';
+import { Plus, MessageCircle, Calendar, Sparkles, Trash2, Edit3, Loader2, AlertCircle, X } from 'lucide-react';
 import { GET_CHATS } from '../../graphql/queries';
-import { CREATE_CHAT } from '../../graphql/mutations';
+import { CREATE_CHAT, UPDATE_CHAT_TITLE, DELETE_CHAT } from '../../graphql/mutations';
 import { Chat } from '../../types';
 import { nhost } from '../../lib/nhost';
 
@@ -14,9 +14,18 @@ interface ChatListProps {
 export const ChatList: React.FC<ChatListProps> = ({ selectedChatId, onChatSelect }) => {
   const [newChatTitle, setNewChatTitle] = useState('');
   const [showNewChatForm, setShowNewChatForm] = useState(false);
+  const [editingChatId, setEditingChatId] = useState<string | null>(null);
+  const [editedChatTitle, setEditedChatTitle] = useState('');
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{show: boolean; chatId: string; title: string} | null>(null);
 
   const { data, loading } = useQuery(GET_CHATS);
   const [createChat, { loading: creating }] = useMutation(CREATE_CHAT, {
+    refetchQueries: [{ query: GET_CHATS }],
+  });
+  const [updateChatTitle, { loading: updating }] = useMutation(UPDATE_CHAT_TITLE, {
+    refetchQueries: [{ query: GET_CHATS }],
+  });
+  const [deleteChat, { loading: deleting }] = useMutation(DELETE_CHAT, {
     refetchQueries: [{ query: GET_CHATS }],
   });
 
@@ -47,6 +56,75 @@ export const ChatList: React.FC<ChatListProps> = ({ selectedChatId, onChatSelect
     } catch (error) {
       console.error('Failed to create chat:', error);
     }
+  };
+
+  const handleEditChatTitle = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!editedChatTitle.trim() || !editingChatId) return;
+
+    try {
+      const result = await updateChatTitle({
+        variables: {
+          id: editingChatId,
+          title: editedChatTitle.trim()
+        }
+      });
+
+      if (result.data?.update_chats_by_pk) {
+        setEditingChatId(null);
+        setEditedChatTitle('');
+      }
+    } catch (error) {
+      console.error('Failed to update chat title:', error);
+    }
+  };
+
+  const handleStartEditing = (chat: Chat, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingChatId(chat.id);
+    setEditedChatTitle(chat.title);
+  };
+
+  const handleCancelEditing = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingChatId(null);
+    setEditedChatTitle('');
+  };
+
+  const handleDeleteChat = async (chatId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const chatToDelete = chats.find(chat => chat.id === chatId);
+    if (chatToDelete) {
+      setDeleteConfirmation({
+        show: true,
+        chatId: chatToDelete.id,
+        title: chatToDelete.title
+      });
+    }
+  };
+
+  const confirmDeleteChat = async () => {
+    if (!deleteConfirmation) return;
+    
+    try {
+      await deleteChat({
+        variables: { id: deleteConfirmation.chatId }
+      });
+      
+      // If the deleted chat was selected, clear the selection
+      if (selectedChatId === deleteConfirmation.chatId) {
+        onChatSelect('');
+      }
+      
+      // Close the confirmation dialog
+      setDeleteConfirmation(null);
+    } catch (error) {
+      console.error('Failed to delete chat:', error);
+    }
+  };
+
+  const cancelDeleteChat = () => {
+    setDeleteConfirmation(null);
   };
 
   const formatDate = (dateString: string) => {
@@ -145,42 +223,141 @@ export const ChatList: React.FC<ChatListProps> = ({ selectedChatId, onChatSelect
                     : 'hover:bg-slate-50'
                 }`}
               >
-                <button
-                  onClick={() => onChatSelect(chat.id)}
-                  className="w-full p-4 text-left"
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center space-x-2 mb-1">
-                        <div className={`w-2 h-2 rounded-full ${
-                          selectedChatId === chat.id ? 'bg-blue-500' : 'bg-slate-300'
-                        }`}></div>
-                        <p className="text-sm font-semibold text-slate-900 truncate">
-                          {chat.title}
-                        </p>
-                      </div>
-                      <div className="flex items-center text-xs text-slate-500">
-                        <Calendar className="h-3 w-3 mr-1" />
-                        {formatDate(chat.created_at)}
-                      </div>
+                {editingChatId === chat.id ? (
+                  <form onSubmit={handleEditChatTitle} className="p-2">
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="text"
+                        value={editedChatTitle}
+                        onChange={(e) => setEditedChatTitle(e.target.value)}
+                        className="flex-1 px-2 py-1 text-sm border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        autoFocus
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                      <button
+                        type="submit"
+                        className="p-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
+                        disabled={updating || !editedChatTitle.trim()}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEditChatTitle();
+                        }}
+                      >
+                        {updating ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Save'}
+                      </button>
+                      <button
+                        type="button"
+                        className="p-1 text-xs bg-slate-200 text-slate-700 rounded hover:bg-slate-300"
+                        onClick={handleCancelEditing}
+                      >
+                        Cancel
+                      </button>
                     </div>
-                  </div>
-                </button>
-                
-                {/* Chat Actions */}
-                <div className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex space-x-1">
-                  <button className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded">
-                    <Edit3 className="h-3 w-3" />
-                  </button>
-                  <button className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded">
-                    <Trash2 className="h-3 w-3" />
-                  </button>
-                </div>
+                  </form>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => onChatSelect(chat.id)}
+                      className="w-full p-4 text-left"
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center space-x-2 mb-1">
+                            <div className={`w-2 h-2 rounded-full ${
+                              selectedChatId === chat.id ? 'bg-blue-500' : 'bg-slate-300'
+                            }`}></div>
+                            <p className="text-sm font-semibold text-slate-900 truncate">
+                              {chat.title}
+                            </p>
+                          </div>
+                          <div className="flex items-center text-xs text-slate-500">
+                            <Calendar className="h-3 w-3 mr-1" />
+                            {formatDate(chat.created_at)}
+                          </div>
+                        </div>
+                      </div>
+                    </button>
+                    
+                    {/* Chat Actions */}
+                    <div className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex space-x-1">
+                      <button 
+                        className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded"
+                        onClick={(e) => handleStartEditing(chat, e)}
+                      >
+                        <Edit3 className="h-3 w-3" />
+                      </button>
+                      <button 
+                        className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded disabled:opacity-50"
+                        onClick={(e) => handleDeleteChat(chat.id, e)}
+                        disabled={deleting}
+                      >
+                        {deleting && selectedChatId === chat.id ? (
+                          <Loader2 className="h-3 w-3 animate-spin text-red-500" />
+                        ) : (
+                          <Trash2 className="h-3 w-3" />
+                        )}
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             ))}
           </div>
         )}
       </div>
+      
+      {/* Delete Confirmation Dialog */}
+      {deleteConfirmation && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          onClick={cancelDeleteChat}
+        >
+          <div 
+            className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 animate-fade-in"
+            onClick={(e) => e.stopPropagation()} // Prevent clicks inside the modal from closing it
+          >
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="p-2 bg-red-100 rounded-full">
+                <AlertCircle className="h-6 w-6 text-red-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-slate-800">Delete Chat</h3>
+              <button 
+                onClick={cancelDeleteChat}
+                className="ml-auto p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            
+            <p className="text-slate-600 mb-5">
+              Are you sure you want to delete "<span className="font-medium">{deleteConfirmation.title}</span>"? 
+              This action cannot be undone.
+            </p>
+            
+            <div className="flex space-x-3 justify-end">
+              <button
+                onClick={cancelDeleteChat}
+                className="px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDeleteChat}
+                className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 rounded-lg transition-all duration-200 transform hover:scale-[1.02] shadow-sm"
+              >
+                {deleting ? (
+                  <div className="flex items-center">
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Deleting...
+                  </div>
+                ) : (
+                  'Delete Chat'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
