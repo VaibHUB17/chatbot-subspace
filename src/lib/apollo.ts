@@ -1,6 +1,7 @@
-import { ApolloClient, InMemoryCache, createHttpLink, split } from '@apollo/client';
+import { ApolloClient, InMemoryCache, createHttpLink, split, from } from '@apollo/client';
 import { setContext } from '@apollo/client/link/context';
 import { GraphQLWsLink } from '@apollo/client/link/subscriptions';
+import { onError } from '@apollo/client/link/error';
 import { createClient } from 'graphql-ws';
 import { getMainDefinition } from '@apollo/client/utilities';
 import { nhost } from './nhost';
@@ -31,6 +32,30 @@ const authLink = setContext((_, { headers }) => {
   };
 });
 
+// Add error handling link
+const errorLink = onError(({ graphQLErrors, networkError }) => {
+  if (graphQLErrors) {
+    for (const err of graphQLErrors) {
+      console.error(
+        `[GraphQL error]: Message: ${err.message}, Location: ${err.locations}, Path: ${err.path}`,
+        err
+      );
+      
+      // You can handle specific error cases here if needed
+    }
+  }
+
+  if (networkError) {
+    console.error(`[Network error]: ${networkError}`);
+    // Check for specific network error patterns
+    const errorMessage = networkError.message || '';
+    if (errorMessage.includes('not a valid json response from webhook')) {
+      console.warn('Rate limit likely exceeded');
+      // Note: We handle the UI update in the component
+    }
+  }
+});
+
 const splitLink = split(
   ({ query }) => {
     const definition = getMainDefinition(query);
@@ -40,7 +65,7 @@ const splitLink = split(
     );
   },
   wsLink,
-  authLink.concat(httpLink)
+  from([errorLink, authLink.concat(httpLink)])
 );
 
 export const apolloClient = new ApolloClient({

@@ -131,6 +131,18 @@ export const MessageInput: React.FC<MessageInputProps> = ({ chatId, onUserMessag
       
     } catch (error) {
       console.error('Failed to send message:', error);
+      
+      // Check for rate limit error - look for the specific error message
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (
+        errorMessage.includes('not a valid json response from webhook') || 
+        errorMessage.includes('rate limit') ||
+        errorMessage.includes('ApolloError')
+      ) {
+        // This is likely a rate limit error
+        setShowRateLimit(true);
+      }
+      
       // Restore message on error
       setMessage(messageContent);
       setBotIsReplying(false);
@@ -175,7 +187,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({ chatId, onUserMessag
         <div className="mb-2 text-center animate-fade-in">
           <div className="inline-flex items-center px-3 py-1 rounded-full bg-amber-50 text-amber-600 text-xs">
             <AlertCircle className="h-3 w-3 mr-2" />
-            Chatbot hit rate limit. Please try again later.
+            Rate limit exceeded. Please wait a moment before trying again.
           </div>
         </div>
       )}
