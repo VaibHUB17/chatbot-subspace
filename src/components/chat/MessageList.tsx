@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useMemo, useState } from 'react';
-import { useSubscription } from '@apollo/client';
+import { useSubscription, useQuery } from '@apollo/client';
 import { Bot, User, Copy, ThumbsUp, ThumbsDown, ArrowDown } from 'lucide-react';
 import { MESSAGES_SUBSCRIPTION } from '../../graphql/subscriptions';
+import { GET_PREVIOUS_MESSAGES } from '../../graphql/queries';
 import { Message } from '../../types';
 
 interface MessageListProps {
@@ -16,18 +17,40 @@ export const MessageList: React.FC<MessageListProps> = ({ chatId, userMessages =
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [likedMessages, setLikedMessages] = useState<Record<string, boolean>>({});
   const [dislikedMessages, setDislikedMessages] = useState<Record<string, boolean>>({});
-  const { data, loading } = useSubscription(MESSAGES_SUBSCRIPTION, {
+  
+  // Fetch previous messages when the chat is selected
+  const { data: previousData, loading: previousLoading } = useQuery(GET_PREVIOUS_MESSAGES, {
+    variables: { chatId },
+    fetchPolicy: 'network-only',
+  });
+  
+  // Subscribe to new bot messages (created after subscription started)
+  const { data: subscriptionData } = useSubscription(MESSAGES_SUBSCRIPTION, {
     variables: { chatId },
   });
 
   // Combine bot messages from subscription with user messages from props
   const messages: Message[] = useMemo(() => {
-    const botMessages = data?.messages || [];
-    // Combine and sort all messages by creation time
-    return [...botMessages, ...userMessages].sort((a, b) => 
+    const previousMessages = previousData?.messages || [];
+    const newBotMessages = subscriptionData?.messages || [];
+    
+    // Combine previous messages, new bot messages from subscription, and user messages from props
+    const allMessages = [...previousMessages, ...newBotMessages, ...userMessages];
+
+    // Remove duplicates by message ID
+    const uniqueMessages = allMessages.reduce((acc: Message[], curr) => {
+      const exists = acc.find(msg => msg.id === curr.id);
+      if (!exists) {
+        acc.push(curr);
+      }
+      return acc;
+    }, []);
+    
+    // Sort by creation time
+    return uniqueMessages.sort((a, b) => 
       new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
     );
-  }, [data?.messages, userMessages]);
+  }, [previousData?.messages, subscriptionData?.messages, userMessages]);
 
   // Check if we should show the scroll button
   useEffect(() => {
@@ -143,7 +166,7 @@ export const MessageList: React.FC<MessageListProps> = ({ chatId, userMessages =
     }
   };
 
-  if (loading) {
+  if (previousLoading) {
     return (
       <div className="flex-1 flex items-center justify-center bg-white">
         <div className="flex flex-col items-center space-y-4">

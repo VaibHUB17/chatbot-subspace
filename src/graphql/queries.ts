@@ -24,3 +24,17 @@ export const GET_CHAT = gql`
     }
   }
 `;
+
+export const GET_PREVIOUS_MESSAGES = gql`
+  query GetPreviousMessages($chatId: uuid!) {
+    messages(
+      where: { chat_id: { _eq: $chatId } }
+      order_by: { created_at: asc }
+    ) {
+      id
+      content
+      is_bot
+      created_at
+    }
+  }
+`;
